@@ -1,0 +1,51 @@
+project(pvr.cmyth)
+
+cmake_minimum_required(VERSION 2.6)
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR})
+
+enable_language(CXX)
+enable_language(C)
+
+find_package(xbmc REQUIRED)
+find_package(xbmcplatform REQUIRED)
+
+include_directories(${xbmcplatform_INCLUDE_DIRS}
+                    ${XBMC_INCLUDE_DIR})
+
+add_definitions(-DUSE_DEMUX -D__STDC_FORMAT_MACROS)
+
+if(NOT WIN32)
+  add_options(ALL_LANGUAGES ALL_BUILDS "-fPIC")
+endif()
+
+set(MYTHTV_SOURCES src/categories.cpp
+                   src/demuxer/ES_AAC.cpp
+                   src/demuxer/ES_MPEGAudio.cpp
+                   src/demuxer/bitstream.cpp
+                   src/demuxer/ES_Teletext.cpp
+                   src/demuxer/debug.cpp
+                   src/demuxer/ES_Subtitle.cpp
+                   src/demuxer/ES_h264.cpp
+                   src/demuxer/ES_AC3.cpp
+                   src/demuxer/elementaryStream.cpp
+                   src/demuxer/ES_MPEGVideo.cpp
+                   src/demuxer/tsDemuxer.cpp
+                   src/demux.cpp
+                   src/pvrclient-mythtv.cpp
+                   src/cppmyth/MythScheduleManager.cpp
+                   src/cppmyth/MythEPGInfo.cpp
+                   src/cppmyth/MythRecordingRule.cpp
+                   src/cppmyth/MythProgramInfo.cpp
+                   src/cppmyth/MythChannel.cpp
+                   src/client.cpp
+                   src/fileOps.cpp)
+
+add_subdirectory(lib/cppmyth)
+add_subdirectory(lib/cppmyth/jansson)
+
+set(DEPLIBS ${xbmcplatform_LIBRARIES} cppmyth jansson)
+
+build_addon(pvr.mythtv MYTHTV DEPLIBS)
+
+include(CPack)

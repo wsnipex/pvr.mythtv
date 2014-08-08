@@ -1,0 +1,22 @@
+Source: xbmc-pvr-mythtv
+Priority: extra
+Maintainer: Arne Morten Kvarving <arne.morten.kvarving@sintef.no>
+Build-Depends: debhelper (>= 8.0.0), cmake, xbmc-pvr-dev,
+               libxbmcplatform-dev, xbmc-addon-dev
+Standards-Version: 3.9.2
+Section: libs
+
+Package: xbmc-pvr-mythtv
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: MythTV PVR for XBMC
+ MythTV PVR for XBMC
+
+Package: xbmc-pvr-mythtv-dbg
+Section: debug
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: debug symbols for MythTV PVR for XBMC
+ debug symbols for the MythTV PVR XBMC addon
+
