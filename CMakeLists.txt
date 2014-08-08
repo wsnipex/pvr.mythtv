@@ -11,7 +11,10 @@ find_package(xbmc REQUIRED)
 find_package(xbmcplatform REQUIRED)
 
 include_directories(${xbmcplatform_INCLUDE_DIRS}
-                    ${XBMC_INCLUDE_DIR})
+                    ${XBMC_INCLUDE_DIR}
+                    ${PROJECT_SOURCE_DIR}/lib/cppmyth/jansson/src
+                    ${PROJECT_SOURCE_DIR}/lib/cppmyth/cppmyth/src
+                    ${CMAKE_BINARY_DIR}/lib/cppmyth/jansson/include)
 
 add_definitions(-DUSE_DEMUX -D__STDC_FORMAT_MACROS)
 
@@ -41,7 +44,8 @@ set(MYTHTV_SOURCES src/categories.cpp
                    src/client.cpp
                    src/fileOps.cpp)
 
-add_subdirectory(lib/cppmyth)
+set(BUILD_DOCS OFF CACHE BOOLEAN "")
+add_subdirectory(lib/cppmyth/cppmyth)
 add_subdirectory(lib/cppmyth/jansson)
 
 set(DEPLIBS ${xbmcplatform_LIBRARIES} cppmyth jansson)

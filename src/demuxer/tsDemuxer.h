@@ -25,7 +25,7 @@
 #include "common.h"
 #include "tsPacket.h"
 #include "elementaryStream.h"
-#include "platform/threads/mutex.h"
+#include "xbmc/threads/mutex.h"
 
 #include <map>
 #include <vector>

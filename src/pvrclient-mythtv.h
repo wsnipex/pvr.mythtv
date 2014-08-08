@@ -26,8 +26,8 @@
 #include "categories.h"
 #include "demux.h"
 
-#include <xbmc_pvr_types.h>
-#include <platform/threads/mutex.h>
+#include <xbmc/xbmc_pvr_types.h>
+#include <xbmc/threads/mutex.h>
 #include <mythsharedptr.h>
 #include <mythcontrol.h>
 #include <mytheventhandler.h>

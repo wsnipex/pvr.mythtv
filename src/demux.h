@@ -25,10 +25,10 @@
 #include "client.h"
 
 #include <mythstream.h>
-#include <platform/threads/threads.h>
-#include <platform/threads/mutex.h>
-#include <platform/util/buffer.h>
-#include <xbmc_stream_utils.hpp>
+#include <xbmc/threads/threads.h>
+#include <xbmc/threads/mutex.h>
+#include <xbmc/util/buffer.h>
+#include <xbmc/xbmc_stream_utils.hpp>
 
 #include <map>
 #include <set>

@@ -20,10 +20,10 @@
  *
  */
 
-#include "platform/os.h"
+#include "xbmc/os.h"
 
-#include "libXBMC_pvr.h"
-#include "xbmc_codec_types.h"
+#include "xbmc/libXBMC_pvr.h"
+#include "xbmc/xbmc_codec_types.h"
 
 #include "demux.h"
 #include "client.h"
