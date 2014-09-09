@@ -33,12 +33,14 @@
 MythProgramInfo::MythProgramInfo()
 : m_proginfo()
 , m_flags(0)
+, m_props(new Props())
 {
 }
 
 MythProgramInfo::MythProgramInfo(Myth::ProgramPtr proginfo)
 : m_proginfo()
 , m_flags(0)
+, m_props(new Props())
 {
   m_proginfo.swap(proginfo);
 }
@@ -105,6 +107,54 @@ bool MythProgramInfo::IsSetup() const
       m_flags |= FLAGS_IS_LIVETV;
   }
   return true;
+}
+
+bool MythProgramInfo::IsVisible() const
+{
+  if (IsSetup() && (m_flags & FLAGS_IS_VISIBLE))
+    return true;
+  return false;
+}
+
+bool MythProgramInfo::IsLiveTV() const
+{
+  if (IsSetup() && (m_flags & FLAGS_IS_LIVETV))
+    return true;
+  return false;
+}
+
+bool MythProgramInfo::HasCoverart() const
+{
+  if (IsSetup() && (m_flags & FLAGS_HAS_COVERART))
+    return true;
+  return false;
+}
+
+bool MythProgramInfo::HasFanart() const
+{
+  if (IsSetup() && (m_flags & FLAGS_HAS_FANART))
+    return true;
+  return false;
+}
+
+void MythProgramInfo::SetPropsFrameRate(float fps)
+{
+  m_props->m_frameRate = fps;
+}
+
+float MythProgramInfo::GetPropsFrameRate() const
+{
+  return m_props->m_frameRate;
+}
+
+void MythProgramInfo::SetPropsAspec(float aspec)
+{
+  m_props->m_aspec = aspec;
+}
+
+float MythProgramInfo::GetPropsAspec() const
+{
+  return m_props->m_aspec;
 }
 
 std::string MythProgramInfo::UID() const
@@ -179,20 +229,6 @@ bool MythProgramInfo::HasBookmark() const
   return ((m_proginfo && (m_proginfo->programFlags & 0x00000010)) ? true : false);
 }
 
-bool MythProgramInfo::IsVisible() const
-{
-  if (IsSetup() && (m_flags & FLAGS_IS_VISIBLE))
-    return true;
-  return false;
-}
-
-bool MythProgramInfo::IsLiveTV() const
-{
-  if (IsSetup() && (m_flags & FLAGS_IS_LIVETV))
-    return true;
-  return false;
-}
-
 uint32_t MythProgramInfo::ChannelID() const
 {
   return (m_proginfo ? m_proginfo->channel.chanId : 0);
@@ -246,18 +282,4 @@ std::string MythProgramInfo::Inetref() const
 uint16_t MythProgramInfo::Season() const
 {
   return (m_proginfo ? m_proginfo->season : 0);
-}
-
-bool MythProgramInfo::HasCoverart() const
-{
-  if (IsSetup() && (m_flags & FLAGS_HAS_COVERART))
-    return true;
-  return false;
-}
-
-bool MythProgramInfo::HasFanart() const
-{
-  if (IsSetup() && (m_flags & FLAGS_HAS_FANART))
-    return true;
-  return false;
 }

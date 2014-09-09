@@ -60,6 +60,7 @@ ProtoBase::ProtoBase(const std::string& server, unsigned port)
 , m_msgConsumed(0)
 , m_isOpen(false)
 {
+  m_socket->SetReadAttempt(6); // 60 sec to hang up
 }
 
 ProtoBase::~ProtoBase()
@@ -71,10 +72,10 @@ ProtoBase::~ProtoBase()
 
 void ProtoBase::HangException()
 {
-  DBG(MYTH_DBG_ERROR, "%s: connection hang with error %d\n", __FUNCTION__, m_socket->GetErrNo());
+  DBG(MYTH_DBG_ERROR, "%s: protocol connection hang with error %d\n", __FUNCTION__, m_socket->GetErrNo());
   m_hang = true;
   this->Close();
-  //@TODO Try reconnect
+  // Note: Calling OpenConnection() will reset m_hang
 }
 
 bool ProtoBase::SendCommand(const char *cmd, bool feedback)

@@ -1,4 +1,4 @@
-project(pvr.cmyth)
+project(pvr.mythtv)
 
 cmake_minimum_required(VERSION 2.6)
 
@@ -22,7 +22,8 @@ if(NOT WIN32)
   add_options(ALL_LANGUAGES ALL_BUILDS "-fPIC")
 endif()
 
-set(MYTHTV_SOURCES src/categories.cpp
+set(MYTHTV_SOURCES src/avinfo.cpp
+                   src/categories.cpp
                    src/demuxer/ES_AAC.cpp
                    src/demuxer/ES_MPEGAudio.cpp
                    src/demuxer/bitstream.cpp

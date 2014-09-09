@@ -33,6 +33,8 @@ enum STREAM_TYPE
   STREAM_TYPE_AUDIO_MPEG2,
   STREAM_TYPE_PRIVATE_DATA,
   STREAM_TYPE_AUDIO_AAC,
+  STREAM_TYPE_AUDIO_AAC_ADTS,
+  STREAM_TYPE_AUDIO_AAC_LATM,
   STREAM_TYPE_VIDEO_MPEG4,
   STREAM_TYPE_VIDEO_H264,
   STREAM_TYPE_VIDEO_VC1,
@@ -79,6 +81,7 @@ public:
     int                   block_align;
     int                   bit_rate;
     int                   bits_Per_sample;
+    bool                  interlaced;
   } stream_info;
 
   typedef struct
@@ -98,7 +101,7 @@ public:
 protected:
   void ResetStreamPacket(STREAM_PKT* pkt);
   uint64_t Rescale(uint64_t a, uint64_t b, uint64_t c);
-  bool SetVideoInformation(int FpsScale, int FpsRate, int Height, int Width, float Aspect);
+  bool SetVideoInformation(int FpsScale, int FpsRate, int Height, int Width, float Aspect, bool Interlaced);
   bool SetAudioInformation(int Channels, int SampleRate, int BitRate, int BitsPerSample, int BlockAlign);
 
   size_t es_alloc_init;         ///< Initial allocation of memory for buffer

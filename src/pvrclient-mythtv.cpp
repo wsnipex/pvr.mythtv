@@ -23,6 +23,7 @@
 #include "pvrclient-mythtv.h"
 #include "client.h"
 #include "tools.h"
+#include "avinfo.h"
 
 #include <time.h>
 #include <set>
@@ -104,6 +105,9 @@ bool PVRClientMythTV::Connect()
   {
     SAFE_DELETE(m_control);
     XBMC->Log(LOG_ERROR, "Failed to connect to MythTV backend on %s:%d", g_szMythHostname.c_str(), g_iProtoPort);
+    // Try wake up for the next attempt
+    if (!g_szMythHostEther.empty())
+      XBMC->WakeOnLan(g_szMythHostEther.c_str());
     return false;
   }
   if (!m_control->CheckService())
@@ -134,25 +138,29 @@ bool PVRClientMythTV::Connect()
 
 const char *PVRClientMythTV::GetBackendName()
 {
-  std::string label;
-  label.append("MythTV (").append(m_control->GetServerHostName()).append(")");
-  XBMC->Log(LOG_DEBUG, "%s: %s", __FUNCTION__, label.c_str());
-  return label.c_str();
+  static std::string myName;
+  myName.clear();
+  myName.append("MythTV (").append(m_control->GetServerHostName()).append(")");
+  XBMC->Log(LOG_DEBUG, "%s: %s", __FUNCTION__, myName.c_str());
+  return myName.c_str();
 }
 
 const char *PVRClientMythTV::GetBackendVersion()
 {
+  static std::string myVersion;
   Myth::VersionPtr version = m_control->GetVersion();
-  XBMC->Log(LOG_DEBUG, "%s: %s", __FUNCTION__, version->version.c_str());
-  return version->version.c_str();
+  myVersion = version->version;
+  XBMC->Log(LOG_DEBUG, "%s: %s", __FUNCTION__, myVersion.c_str());
+  return myVersion.c_str();
 }
 
 const char *PVRClientMythTV::GetConnectionString()
 {
-  std::string cs;
-  cs.append("http://").append(g_szMythHostname).append(":").append(Myth::IntToString(g_iWSApiPort));
-  XBMC->Log(LOG_DEBUG, "%s: %s", __FUNCTION__, cs.c_str());
-  return cs.c_str();
+  static std::string myConnectionString;
+  myConnectionString.clear();
+  myConnectionString.append("http://").append(g_szMythHostname).append(":").append(Myth::IntToString(g_iWSApiPort));
+  XBMC->Log(LOG_DEBUG, "%s: %s", __FUNCTION__, myConnectionString.c_str());
+  return myConnectionString.c_str();
 }
 
 PVR_ERROR PVRClientMythTV::GetDriveSpace(long long *iTotal, long long *iUsed)
@@ -181,7 +189,7 @@ void PVRClientMythTV::OnSleep()
 void PVRClientMythTV::OnWake()
 {
   if (m_eventHandler)
-    m_eventHandler->Start(); // Resume(true)
+    m_eventHandler->Start();
   if (m_fileOps)
     m_fileOps->Resume();
 }
@@ -217,6 +225,12 @@ void PVRClientMythTV::HandleBackendMessage(const Myth::EventMessage& msg)
           m_hang = false;
           XBMC->QueueNotification(QUEUE_INFO, XBMC->GetLocalizedString(30303)); // Connection to MythTV restored
         }
+      }
+      else if (msg.subject[0] == EVENTHANDLER_NOTCONNECTED)
+      {
+        // Try wake up
+        if (!g_szMythHostEther.empty())
+          XBMC->WakeOnLan(g_szMythHostEther.c_str());
       }
       break;
     default:
@@ -314,8 +328,12 @@ void PVRClientMythTV::HandleRecordingListChange(const Myth::EventMessage& msg)
     {
       if (g_bExtraDebug)
         XBMC->Log(LOG_DEBUG, "%s: Update recording: %s", __FUNCTION__, prog.UID().c_str());
-      // Copy cached framerate
-      //prog.SetFrameRate(it->second.FrameRate());
+      if (m_control->RefreshRecordedArtwork(*(msg.program)) && g_bExtraDebug)
+        XBMC->Log(LOG_DEBUG, "%s: artwork found for %s", __FUNCTION__, prog.UID().c_str());
+      // Reset to recalculate flags
+      prog.Reset();
+      // Keep props
+      prog.CopyProps(it->second);
       // Update recording
       it->second = prog;
       ++m_recordingChangePinCount;
@@ -704,8 +722,8 @@ void PVRClientMythTV::ForceUpdateRecording(ProgramInfoMap::iterator it)
     if (!prog.IsNull())
     {
       CLockObject lock(m_recordingsLock);
-      // Copy cached framerate
-      //prog.SetFrameRate(it->second.FrameRate());
+      // Copy props
+      prog.CopyProps(it->second);
       // Update recording
       it->second = prog;
       ++m_recordingChangePinCount;
@@ -935,129 +953,6 @@ int PVRClientMythTV::GetRecordingLastPlayedPosition(MythProgramInfo &programInfo
   return bookmark;
 }
 
-PVR_ERROR PVRClientMythTV::GetRecordingEdl(const PVR_RECORDING &recording, PVR_EDL_ENTRY entries[], int *size)
-{
-  if (g_bExtraDebug)
-  {
-    XBMC->Log(LOG_DEBUG, "%s: Reading edl for: %s", __FUNCTION__, recording.strTitle);
-  }
-
-  CLockObject lock(m_recordingsLock);
-  ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
-  if (it == m_recordings.end())
-  {
-    XBMC->Log(LOG_DEBUG, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
-    *size = 0;
-    return PVR_ERROR_FAILED;
-  }
-
-  bool useFrameRate = true;
-  float frameRate = 0.0f;
-  int64_t psoffset, nsoffset;
-
-  if (m_db.GetSchemaVersion() >= 1309)
-  {
-    if (m_db.GetRecordingSeekOffset(it->second, MARK_DURATION_MS, 0, &psoffset, &nsoffset) > 0)
-    {
-      // mark 33 found for recording. no need convertion using framerate.
-      useFrameRate = false;
-    }
-    else
-    {
-      XBMC->Log(LOG_DEBUG, "%s: Missing recordedseek map, try running 'mythcommflag --rebuild' for recording %s", __FUNCTION__, recording.strRecordingId);
-      XBMC->Log(LOG_DEBUG, "%s: Fallback using framerate ...", __FUNCTION__);
-    }
-  }
-  if (useFrameRate)
-  {
-    frameRate = m_db.GetRecordingFrameRate(it->second) / 1000.0f;
-    if (frameRate <= 0)
-    {
-      XBMC->Log(LOG_DEBUG, "%s: Failed to read framerate for %s", __FUNCTION__, recording.strRecordingId);
-      *size = 0;
-      return PVR_ERROR_FAILED;
-    }
-  }
-
-  Edl commbreakList = m_con.GetCommbreakList(it->second);
-  int commbreakCount = commbreakList.size();
-  XBMC->Log(LOG_DEBUG, "%s: Found %d commercial breaks for: %s", __FUNCTION__, commbreakCount, recording.strTitle);
-
-  Edl cutList = m_con.GetCutList(it->second);
-  XBMC->Log(LOG_DEBUG, "%s: Found %d cut list entries for: %s", __FUNCTION__, cutList.size(), recording.strTitle);
-
-  commbreakList.insert(commbreakList.end(), cutList.begin(), cutList.end());
-  int index = 0;
-  Edl::const_iterator edlIt;
-  for (edlIt = commbreakList.begin(); edlIt != commbreakList.end(); ++edlIt)
-  {
-    if (index < *size)
-    {
-      int64_t start, end;
-      start = end = 0;
-
-      // Pull the closest match in the DB if it exists
-      if (useFrameRate)
-      {
-        start = (int64_t)(edlIt->start_mark / frameRate * 1000);
-        end = (int64_t)(edlIt->end_mark / frameRate * 1000);
-        XBMC->Log(LOG_DEBUG, "%s: start_mark: %lld, end_mark: %lld, start: %lld, end: %lld", __FUNCTION__, edlIt->start_mark, edlIt->end_mark, start, end);
-      }
-      else
-      {
-        // mask == 1 ==> Found before the mark (use psoffset, nsoffset is zero)
-        // mask == 2 ==> Found after the mark (use nsoffset, psoffset is zero)
-        // mask == 3 ==> Found around the mark (use nsoffset [next offset / later] for start, psoffset [prev. offset / before] for end)
-        int mask = m_db.GetRecordingSeekOffset(it->second, MARK_DURATION_MS, edlIt->start_mark, &psoffset, &nsoffset);
-        XBMC->Log(LOG_DEBUG, "%s: start_mark offset mask: %d, psoffset: %"PRId64", nsoffset: %"PRId64, __FUNCTION__, mask, psoffset, nsoffset);
-        if (mask > 0)
-        {
-          if (mask == 1)
-            start = psoffset;
-          else if (edlIt->start_mark == 0)
-            start = 0;
-          else
-            start = nsoffset;
-
-          mask = m_db.GetRecordingSeekOffset(it->second, MARK_DURATION_MS, edlIt->end_mark, &psoffset, &nsoffset);
-          XBMC->Log(LOG_DEBUG, "%s: end_mark offset mask: %d, psoffset: %"PRId64", nsoffset: %"PRId64, __FUNCTION__, mask, psoffset, nsoffset);
-          if (mask == 2)
-            end = nsoffset;
-          else if (mask == 1 || mask == 3)
-            end = psoffset;
-          else
-            // By forcing the end to be zero, it will never be > start, which makes the values invalid
-            // This is only for failed lookups for the end position
-            end = 0;
-        }
-        if (mask <= 0)
-          XBMC->Log(LOG_DEBUG, "%s: Failed to retrieve recordedseek offset values", __FUNCTION__);
-      }
-
-      if (start < end)
-      {
-        // We have both a valid start and end value now
-        XBMC->Log(LOG_DEBUG, "%s: start_mark: %"PRId64", end_mark: %"PRId64", start: %"PRId64", end: %"PRId64, __FUNCTION__, edlIt->start_mark, edlIt->end_mark, start, end);
-        PVR_EDL_ENTRY entry;
-        entry.start = start;
-        entry.end = end;
-        entry.type = index < commbreakCount ? PVR_EDL_TYPE_COMBREAK : PVR_EDL_TYPE_CUT;
-        entries[index] = entry;
-        index++;
-      }
-      else
-        XBMC->Log(LOG_DEBUG, "%s: invalid offset: start_mark: %"PRId64", end_mark: %"PRId64", start: %"PRId64", end: %"PRId64, __FUNCTION__, edlIt->start_mark, edlIt->end_mark, start, end);
-    }
-    else
-    {
-      XBMC->Log(LOG_ERROR, "%s: Maximum number of edl entries reached for %s", __FUNCTION__, recording.strTitle);
-      break;
-    }
-  }
-  *size = index;
-  return PVR_ERROR_NO_ERROR;
-}
-
 int PVRClientMythTV::GetRecordingLastPlayedPosition(const PVR_RECORDING &recording)
 {
   // MythTV provides it's bookmarks as frame offsets whereas XBMC expects a time offset.
@@ -1079,6 +974,88 @@ int PVRClientMythTV::GetRecordingLastPlayedPosition(const PVR_RECORDING &recordi
   return bookmark;
 }
 */
+
+PVR_ERROR PVRClientMythTV::GetRecordingEdl(const PVR_RECORDING &recording, PVR_EDL_ENTRY entries[], int *size)
+{
+  if (g_bExtraDebug)
+  {
+    XBMC->Log(LOG_DEBUG, "%s: Reading edl for: %s", __FUNCTION__, recording.strTitle);
+  }
+  // Check recording
+  MythProgramInfo prog;
+  {
+    CLockObject lock(m_recordingsLock);
+    ProgramInfoMap::iterator it = m_recordings.find(recording.strRecordingId);
+    if (it == m_recordings.end())
+    {
+      XBMC->Log(LOG_ERROR, "%s: Recording %s does not exist", __FUNCTION__, recording.strRecordingId);
+      return PVR_ERROR_INVALID_PARAMETERS;
+    }
+    prog = it->second;
+  }
+  // Check required props else return
+  float fps = prog.GetPropsFrameRate();
+  XBMC->Log(LOG_DEBUG, "%s: AV props: Frame Rate = %.3f", __FUNCTION__, fps);
+  if (fps <= 0)
+  {
+    *size = 0;
+    return PVR_ERROR_NO_ERROR;
+  }
+  // Processing marks
+  Myth::MarkListPtr skpList = m_control->GetCommBreakList(*(prog.GetPtr()));
+  XBMC->Log(LOG_DEBUG, "%s: Found %d commercial breaks for: %s", __FUNCTION__, skpList->size(), recording.strTitle);
+  Myth::MarkListPtr cutList = m_control->GetCutList(*(prog.GetPtr()));
+  XBMC->Log(LOG_DEBUG, "%s: Found %d cut list entries for: %s", __FUNCTION__, cutList->size(), recording.strTitle);
+  skpList->insert(skpList->end(), cutList->begin(), cutList->end());
+  int index = 0;
+  Myth::MarkList::const_iterator it;
+  Myth::MarkPtr startPtr;
+  for (it = skpList->begin(); it != skpList->end(); ++it)
+  {
+    switch ((*it)->markType)
+    {
+      case Myth::MARK_COMM_START:
+        startPtr = *it;
+        break;
+      case Myth::MARK_CUT_START:
+        startPtr = *it;
+        break;
+      case Myth::MARK_COMM_END:
+        if (startPtr && startPtr->markType == Myth::MARK_COMM_START && (*it)->markValue > startPtr->markValue)
+        {
+          PVR_EDL_ENTRY entry;
+          double s = (double)(startPtr->markValue) / fps;
+          double e = (double)((*it)->markValue) / fps;
+          entry.start = (int64_t)(s * 1000);
+          entry.end = (int64_t)(e * 1000);
+          entry.type = PVR_EDL_TYPE_COMBREAK;
+          entries[index] = entry;
+          index++;
+          if (g_bExtraDebug)
+            XBMC->Log(LOG_DEBUG, "%s: COMBREAK %9.3f - %9.3f", __FUNCTION__, s, e);
+        }
+      case Myth::MARK_CUT_END:
+        if (startPtr && startPtr->markType == Myth::MARK_CUT_START && (*it)->markValue > startPtr->markValue)
+        {
+          PVR_EDL_ENTRY entry;
+          double s = (double)(startPtr->markValue) / fps;
+          double e = (double)((*it)->markValue) / fps;
+          entry.start = (int64_t)(s * 1000);
+          entry.end = (int64_t)(e * 1000);
+          entry.type = PVR_EDL_TYPE_CUT;
+          entries[index] = entry;
+          index++;
+          if (g_bExtraDebug)
+            XBMC->Log(LOG_DEBUG, "%s: CUT %9.3f - %9.3f", __FUNCTION__, s, e);
+        }
+      default:
+        startPtr.reset();
+    }
+  }
+  *size = index;
+  return PVR_ERROR_NO_ERROR;
+}
+
 MythChannel PVRClientMythTV::FindRecordingChannel(const MythProgramInfo& programInfo)
 {
   ChannelIdMap::iterator channelByIdIt = m_channelsById.find(programInfo.ChannelID());
@@ -1789,27 +1766,19 @@ bool PVRClientMythTV::OpenRecordedStream(const PVR_RECORDING &recording)
       m_recordingStream = new Myth::RecordingPlayback(*m_eventHandler);
     else
     {
-      std::string backend_addr;
-      int backend_port;
       // Query backend server IP 
-      Myth::SettingPtr settingAddr = m_control->GetSetting("BackendServerIP6", prog.HostName());
-      if (settingAddr && !settingAddr->value.empty() && settingAddr->value != "::1")
-        backend_addr = settingAddr->value;
-      else
-      {
-        settingAddr = m_control->GetSetting("BackendServerIP", prog.HostName());
-        if (settingAddr && !settingAddr->value.empty())
-          backend_addr = settingAddr->value;
-        else
-          backend_addr = prog.HostName();
-      }
+      std::string backend_addr(m_control->GetBackendServerIP6(prog.HostName()));
+      if (backend_addr.empty())
+        backend_addr = m_control->GetBackendServerIP(prog.HostName());
+      if (backend_addr.empty())
+        backend_addr = prog.HostName();
       // Query backend server port
-      Myth::SettingPtr settingPort = m_control->GetSetting("BackendServerPort", prog.HostName());
-      if (!settingPort || settingPort->value.empty() || (backend_port = Myth::StringToInt(settingPort->value)) <= 0)
-        backend_port = g_iProtoPort;
+      unsigned backend_port(m_control->GetBackendServerPort(prog.HostName()));
+      if (!backend_port)
+        backend_port = (unsigned)g_iProtoPort;
       // Request the stream from slave host. A dedicated event handler will be opened.
-      XBMC->Log(LOG_INFO, "%s: Connect to remote backend %s:%d", __FUNCTION__, backend_addr.c_str(), backend_port);
-      m_recordingStream = new Myth::RecordingPlayback(backend_addr, (unsigned)backend_port);
+      XBMC->Log(LOG_INFO, "%s: Connect to remote backend %s:%u", __FUNCTION__, backend_addr.c_str(), backend_port);
+      m_recordingStream = new Myth::RecordingPlayback(backend_addr, backend_port);
     }
   }
   else
@@ -1821,6 +1790,15 @@ bool PVRClientMythTV::OpenRecordedStream(const PVR_RECORDING &recording)
   {
     if (g_bExtraDebug)
       XBMC->Log(LOG_DEBUG, "%s: Done", __FUNCTION__);
+    // Gather AV info for later use
+    AVInfo info(m_recordingStream);
+    ElementaryStream::STREAM_INFO mInfo;
+    if (info.GetMainStream(&mInfo) && mInfo.fps_scale > 0)
+    {
+      prog.SetPropsFrameRate((float)(mInfo.fps_rate) / (mInfo.fps_scale * (mInfo.interlaced ? 2 : 1)));
+      if (mInfo.aspect > 0)
+        prog.SetPropsAspec(mInfo.aspect);
+    }
     return true;
   }
 

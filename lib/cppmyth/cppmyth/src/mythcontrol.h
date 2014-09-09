@@ -153,6 +153,27 @@ namespace Myth
     }
 
     /**
+     * @brief Query backend server IP
+     * @param hostName
+     * @return string containing found IP or nil
+     */
+    std::string GetBackendServerIP(const std::string& hostName);
+
+    /**
+     * @brief Query backend server IP6
+     * @param hostName
+     * @return string containing found IP6 or nil
+     */
+    std::string GetBackendServerIP6(const std::string& hostName);
+
+    /**
+     * @brief Query backend server port for protocol commands
+     * @param hostName
+     * @return unsigned more than 0 else invalid
+     */
+    unsigned GetBackendServerPort(const std::string& hostName);
+
+    /**
      * @brief Query information on all recorded programs
      * @param n
      * @param descending
@@ -397,6 +418,24 @@ namespace Myth
     {
       return m_wsapi.GetRecordingArtwork(type, program.inetref, program.season, width, height);
     }
+
+    /**
+     * @brief Get a list of artwork available for a recording by start time and channel id.
+     * @param chanid
+     * @param recstartts
+     * @return ArtworkListPtr
+     */
+    ArtworkListPtr GetRecordingArtworkList(uint32_t chanid, time_t recstartts)
+    {
+      return m_wsapi.GetRecordingArtworkList(chanid, recstartts);
+    }
+
+    /**
+     * @brief Refresh artwork available for a recording.
+     * @param program
+     * @return bool Return true if any artwork found
+     */
+    bool RefreshRecordedArtwork(Program& program);
 
     /**
      * @brief Request a set of cut list marks for a recording
