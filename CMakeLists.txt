@@ -36,6 +36,8 @@ set(MYTHTV_SOURCES src/avinfo.cpp
                    src/demuxer/ES_MPEGVideo.cpp
                    src/demuxer/tsDemuxer.cpp
                    src/demux.cpp
+                   src/guidialogbase.cpp
+                   src/guidialogyesno.cpp
                    src/pvrclient-mythtv.cpp
                    src/cppmyth/MythScheduleManager.cpp
                    src/cppmyth/MythEPGInfo.cpp
@@ -46,11 +48,13 @@ set(MYTHTV_SOURCES src/avinfo.cpp
                    src/fileOps.cpp)
 
 set(BUILD_DOCS OFF CACHE BOOLEAN "")
+set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(lib/cppmyth/cppmyth)
 add_subdirectory(lib/cppmyth/jansson)
 
 set(DEPLIBS ${xbmcplatform_LIBRARIES} cppmyth jansson)
 
+set(BUILD_SHARED_LIBS ON)
 build_addon(pvr.mythtv MYTHTV DEPLIBS)
 
 include(CPack)
