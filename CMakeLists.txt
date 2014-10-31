@@ -7,11 +7,11 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR})
 enable_language(CXX)
 enable_language(C)
 
-find_package(xbmc REQUIRED)
-find_package(xbmcplatform REQUIRED)
+find_package(kodi REQUIRED)
+find_package(kodiplatform REQUIRED)
 
-include_directories(${xbmcplatform_INCLUDE_DIRS}
-                    ${XBMC_INCLUDE_DIR}
+include_directories(${KODIPLATFORM_INCLUDE_DIRS}
+                    ${KODI_INCLUDE_DIR}
                     ${PROJECT_SOURCE_DIR}/lib/cppmyth/jansson/src
                     ${PROJECT_SOURCE_DIR}/lib/cppmyth/cppmyth/src
                     ${CMAKE_BINARY_DIR}/lib/cppmyth/jansson/include)
@@ -52,7 +52,7 @@ set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(lib/cppmyth/cppmyth)
 add_subdirectory(lib/cppmyth/jansson)
 
-set(DEPLIBS ${xbmcplatform_LIBRARIES} cppmyth jansson)
+set(DEPLIBS ${KODIPLATFORM_LIBRARIES} cppmyth jansson)
 
 set(BUILD_SHARED_LIBS ON)
 build_addon(pvr.mythtv MYTHTV DEPLIBS)
