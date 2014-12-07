@@ -54,6 +54,23 @@ add_subdirectory(lib/cppmyth/jansson)
 
 set(DEPLIBS ${kodiplatform_LIBRARIES} cppmyth jansson)
 
+unset(__link_flags)
+# Check if the linker supports version script (i.e. is GNU ld)
+include(TestCXXAcceptsFlag)
+if(CMAKE_COMPILER_IS_GNUCXX)
+  set(__symbols "{ local: *; };")
+  set(__version_script "${CMAKE_CURRENT_BINARY_DIR}/tmp.ver")
+  file(WRITE ${__version_script} "${__symbols}\n")
+  check_cxx_accepts_flag("-Wl,--version-script=${__version_script}" LD_ACCEPTS_VERSION_SCRIPT)
+  if(LD_ACCEPTS_VERSION_SCRIPT)
+    set(__link_flags "-Wl,--version-script='${PROJECT_SOURCE_DIR}/src/addon.map'")
+  endif()
+endif()
+
+if(__link_flags)
+  add_options(ALL_LANGUAGES ALL_BUILDS "${__link_flags}")
+endif()
+
 set(BUILD_SHARED_LIBS ON)
 build_addon(pvr.mythtv MYTHTV DEPLIBS)
 
