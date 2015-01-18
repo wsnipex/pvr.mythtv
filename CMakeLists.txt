@@ -53,6 +53,9 @@ add_subdirectory(lib/cppmyth/cppmyth)
 add_subdirectory(lib/cppmyth/jansson)
 
 set(DEPLIBS ${kodiplatform_LIBRARIES} cppmyth jansson)
+if (WIN32)
+  list(APPEND DEPLIBS ws2_32)
+endif()
 
 unset(__link_flags)
 # Check if the linker supports version script (i.e. is GNU ld)
