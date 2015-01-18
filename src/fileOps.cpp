@@ -30,6 +30,8 @@
 #define FILEOPS_STREAM_BUFFER_SIZE    32000         // Buffer size to download artworks
 #define FILEOPS_STAMP_FILENAME        "stamp"       // Base name for cache stamp file
 #define FILEOPS_NOSTAMP               (time_t)(-1)
+#define FILEOPS_CHANNEL_DUMMY_ICON    "channel.png"
+#define FILEOPS_RECORDING_DUMMY_ICON  "recording.png"
 
 using namespace ADDON;
 using namespace PLATFORM;
@@ -64,6 +66,8 @@ std::string FileOps::GetChannelIconPath(const MythChannel& channel)
 {
   if (channel.IsNull() || channel.Icon().empty())
     return "";
+  if (!g_bChannelIcons)
+    return g_szClientPath + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + FILEOPS_CHANNEL_DUMMY_ICON;
 
   std::string uid = Myth::IdToString(channel.ID());
   if (g_bExtraDebug)
@@ -94,6 +98,8 @@ std::string FileOps::GetPreviewIconPath(const MythProgramInfo& recording)
 {
   if (recording.IsNull())
     return "";
+  if (!g_bRecordingIcons)
+    return g_szClientPath + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + FILEOPS_RECORDING_DUMMY_ICON;
 
   std::string uid = recording.UID();
   if (g_bExtraDebug)
@@ -124,6 +130,15 @@ std::string FileOps::GetArtworkPath(const MythProgramInfo& recording, FileType t
 {
   if (recording.IsNull())
     return "";
+  if (!g_bRecordingIcons)
+    switch (type)
+    {
+    case FileTypePreview:
+    case FileTypeCoverart:
+      return g_szClientPath + PATH_SEPARATOR_STRING + "resources" + PATH_SEPARATOR_STRING + FILEOPS_RECORDING_DUMMY_ICON;
+    default:
+      return "";
+    }
 
   std::string uid = recording.UID();
   if (g_bExtraDebug)
@@ -206,8 +221,8 @@ void *FileOps::Process()
       if (g_bExtraDebug)
         XBMC->Log(LOG_DEBUG,"%s: Job fetched: type: %d, local: %s", __FUNCTION__, job.m_fileType, job.m_localFilename.c_str());
       // Try to open the destination file
-      void *localFile = OpenFile(job.m_localFilename.c_str());
-      if (!localFile)
+      void *file = OpenFile(job.m_localFilename.c_str());
+      if (!file)
         continue;
 
       // Connect to the stream
@@ -227,10 +242,14 @@ void *FileOps::Process()
       default:
         break;
       }
-      //  Cache it to the local addon cache
+
       if (fileStream && fileStream->GetSize() > 0)
       {
-        if (CacheFile(localFile, fileStream.get()))
+        // Cache it to the local addon cache
+        bool cached = CacheFile(file, fileStream.get());
+        XBMC->CloseFile(file);
+
+        if (cached)
         {
           if (g_bExtraDebug)
             XBMC->Log(LOG_DEBUG, "%s: File Cached: type: %d, local: %s", __FUNCTION__, job.m_fileType, job.m_localFilename.c_str());
@@ -239,13 +258,13 @@ void *FileOps::Process()
         {
           XBMC->Log(LOG_DEBUG, "%s: Caching file failed: type: %d, local: %s", __FUNCTION__, job.m_fileType, job.m_localFilename.c_str());
           if (XBMC->FileExists(job.m_localFilename.c_str(), true))
-          {
             XBMC->DeleteFile(job.m_localFilename.c_str());
-          }
         }
       }
       else
       {
+        XBMC->CloseFile(file);
+
         // Failed to open file for reading. Unfortunately it cannot be determined if this is a permanent or a temporary problem (new recording's preview hasn't been generated yet).
         // Increase the error count and retry to cache the file a few times
         if (!fileStream)
@@ -321,7 +340,7 @@ void *FileOps::OpenFile(const std::string& localFilename)
   return file;
 }
 
-bool FileOps::CacheFile(void *destination, Myth::Stream *source)
+bool FileOps::CacheFile(void *file, Myth::Stream *source)
 {
   int64_t size = source->GetSize();
   char *buffer = new char[FILEOPS_STREAM_BUFFER_SIZE];
@@ -335,7 +354,7 @@ bool FileOps::CacheFile(void *destination, Myth::Stream *source)
     char *p = buffer;
     while (br > 0)
     {
-      int bw = XBMC->WriteFile(destination, p, br);
+      int bw = XBMC->WriteFile(file, p, br);
       if (bw <= 0)
         break;
 
@@ -343,7 +362,6 @@ bool FileOps::CacheFile(void *destination, Myth::Stream *source)
       p += bw;
     }
   }
-  XBMC->CloseFile(destination);
   delete[] buffer;
 
   if (size)
